@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "app.py"
       - "Dockerfile"
+      - "app.py"
       - ".github/workflows/deploy-azure.yml"
 
 env:
@@ -17,15 +17,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Login to ACR
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ${{ secrets.ACR_LOGIN_SERVER }}
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build & Push
-        uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
@@ -37,9 +35,24 @@ jobs:
     needs: build-push
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to Azure Web App for Containers
-        uses: azure/webapps-deploy@v3
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
         with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          images: ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set image on Web App
+        run: |
+          az webapp config container set \
+            --name "${{ secrets.AZURE_WEBAPP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --docker-custom-image-name "${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" \
+            --docker-registry-server-url "https://${{ secrets.ACR_LOGIN_SERVER }}" \
+            --docker-registry-server-user "${{ secrets.ACR_USERNAME }}" \
+            --docker-registry-server-password "${{ secrets.ACR_PASSWORD }}"
+
+      - name: Restart
+        run: |
+          az webapp restart \
+            --name "${{ secrets.AZURE_WEBAPP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}"
