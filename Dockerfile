@@ -40,7 +40,7 @@ from huggingface_hub import hf_hub_download\n\
 p = hf_hub_download(repo_id='Qwen/Phi-3.5-mini-instruct-GGUF', filename='Phi-3.5-mini-instruct-Q4_K_M.gguf', local_dir='/weights', local_dir_use_symlinks=False)\n\
 print('GGUF ->', p)\n\
 PY
-
+ 
 # ---- app ----
 WORKDIR /app
 COPY app.py /app/app.py
