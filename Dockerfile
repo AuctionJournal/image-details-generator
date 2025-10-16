@@ -51,3 +51,4 @@ ENV LLM_N_GPU_LAYERS=0
 
 EXPOSE 8000
 CMD ["uvicorn","app:app","--host","0.0.0.0","--port","8000","--workers","1"]
+
