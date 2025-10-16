@@ -1,13 +1,10 @@
-# Dockerfile
 FROM python:3.11-slim
 
-# System libs (tesseract, build tools for llama-cpp-python CPU)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 libjpeg62-turbo libpng16-16 ca-certificates tesseract-ocr \
     build-essential cmake curl git \
  && rm -rf /var/lib/apt/lists/*
 
-# Python deps
 RUN python -m pip install --upgrade pip \
  && pip install \
       fastapi uvicorn[standard] \
@@ -19,8 +16,6 @@ RUN python -m pip install --upgrade pip \
 WORKDIR /app
 COPY app.py /app/app.py
 
-# Download models at build time (no secrets needed)
-# BLIP large
 RUN python - <<'PY'\n\
 from huggingface_hub import snapshot_download\n\
 snapshot_download(repo_id="Salesforce/blip-image-captioning-large",\n\
@@ -29,7 +24,6 @@ snapshot_download(repo_id="Salesforce/blip-image-captioning-large",\n\
                  local_dir_use_symlinks=False)\n\
 PY
 
-# Small CPU GGUF
 RUN mkdir -p /llm && \
     curl -L -o /llm/Phi-3.5-mini-instruct-Q4_K_M.gguf \
     https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf
