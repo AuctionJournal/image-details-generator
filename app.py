@@ -207,3 +207,7 @@ def analyze(body: AnalyzeIn):
     return AnalyzeOut(
         title=title, description=desc, categoryID=cat, categoryName=id2name.get(cat, "OTHER")
     )
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}

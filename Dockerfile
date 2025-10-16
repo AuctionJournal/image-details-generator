@@ -1,56 +1,43 @@
-# syntax=docker/dockerfile:1
-
+# Dockerfile
 FROM python:3.11-slim
 
-# ---- system deps ----
+# System libs (tesseract, build tools for llama-cpp-python CPU)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 libjpeg62-turbo libpng16-16 ca-certificates tesseract-ocr \
-    build-essential cmake git && \
-    rm -rf /var/lib/apt/lists/*
+    build-essential cmake curl git \
+ && rm -rf /var/lib/apt/lists/*
 
-# ---- python deps ----
-RUN python -m pip install --upgrade pip && \
-    pip install \
+# Python deps
+RUN python -m pip install --upgrade pip \
+ && pip install \
       fastapi uvicorn[standard] \
       torch==2.4.1 torchvision==0.19.1 \
       transformers==4.44.2 tokenizers==0.19.1 \
       pillow requests pytesseract \
-      llama-cpp-python==0.2.90 \
-      huggingface_hub==0.24.6
+      llama-cpp-python==0.2.90
 
-# ---- model caches on image ----
-ENV TRANSFORMERS_CACHE=/hf-cache \
-    HF_HOME=/hf-cache
-RUN mkdir -p /hf-cache /models /weights
-
-# 1) Download BLIP-large (public) into /models
-RUN python - <<'PY'\n\
-from transformers import BlipProcessor, BlipForConditionalGeneration\n\
-BlipProcessor.from_pretrained('Salesforce/blip-image-captioning-large', cache_dir='/models')\n\
-BlipForConditionalGeneration.from_pretrained('Salesforce/blip-image-captioning-large', cache_dir='/models')\n\
-print('BLIP-large cached')\n\
-PY
-
-# 2) Download a public GGUF (Phi-3.5-mini-instruct Q4_K_M) into /weights
-# If that repo ever requires a token, you can build with:  --build-arg HF_TOKEN=xxxx
-ARG HF_TOKEN=""
-ENV HUGGINGFACE_HUB_TOKEN=$HF_TOKEN
-RUN python - <<'PY'\n\
-from huggingface_hub import hf_hub_download\n\
-p = hf_hub_download(repo_id='Qwen/Phi-3.5-mini-instruct-GGUF', filename='Phi-3.5-mini-instruct-Q4_K_M.gguf', local_dir='/weights', local_dir_use_symlinks=False)\n\
-print('GGUF ->', p)\n\
-PY
- 
-# ---- app ----
 WORKDIR /app
 COPY app.py /app/app.py
 
-# env wiring
-ENV BLIP_DIR=/models/Salesforce__blip-image-captioning-large \
-    LLM_PATH=/weights/Phi-3.5-mini-instruct-Q4_K_M.gguf \
-    MAX_ANALYZE_IMAGES=4
+# Download models at build time (no secrets needed)
+# BLIP large
+RUN python - <<'PY'\n\
+from huggingface_hub import snapshot_download\n\
+snapshot_download(repo_id="Salesforce/blip-image-captioning-large",\n\
+                 local_dir="/app/models/Salesforce__blip-image-captioning-large",\n\
+                 allow_patterns=["*.json","*.bin","*.txt","*.model","*.py","*.safetensors"],\n\
+                 local_dir_use_symlinks=False)\n\
+PY
+
+# Small CPU GGUF
+RUN mkdir -p /llm && \
+    curl -L -o /llm/Phi-3.5-mini-instruct-Q4_K_M.gguf \
+    https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf
+
+ENV BLIP_DIR=/app/models/Salesforce__blip-image-captioning-large
+ENV LLM_PATH=/llm/Phi-3.5-mini-instruct-Q4_K_M.gguf
+ENV LLM_N_GPU_LAYERS=0
+ENV HOST=0.0.0.0 PORT=8000
 
 EXPOSE 8000
-# gunicorn for multi-worker; WEB_CONCURRENCY env can tune
-ENV WEB_CONCURRENCY=2
-CMD ["bash", "-lc", "gunicorn -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-2} -b 0.0.0.0:8000 app:app"]
+CMD ["uvicorn","app:app","--host","0.0.0.0","--port","8000","--workers","1"]
