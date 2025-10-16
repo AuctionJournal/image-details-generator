@@ -42,14 +42,23 @@ def ensure_models_loaded():
         _llm = Llama(model_path=LLM_PATH, n_ctx=4096, n_threads=os.cpu_count() or 4, n_gpu_layers=LLM_N_GPU_LAYERS)
 
 # ---------- categories ----------
+# --- make category fetch fail-soft instead of crashing the app ---
 def fetch_categories(force=False) -> Tuple[Dict[int, str], int]:
     global _id_to_name, _other_id, _last_cat_fetch
     if not force and time.time() - _last_cat_fetch < 300 and _id_to_name:
         return _id_to_name, _other_id
+    try:
+        r = requests.post(CATEGORIES_URL, json={"isFindLotCount": True}, timeout=10)
+        r.raise_for_status()
+        data = (r.json() or {}).get("data") or []
+    except Exception:
+        # fallback: keep previous cache or minimal OTHER set
+        if _id_to_name:
+            return _id_to_name, _other_id
+        _id_to_name, _other_id = {0: "OTHER"}, 0
+        _last_cat_fetch = time.time()
+        return _id_to_name, _other_id
 
-    r = requests.post(CATEGORIES_URL, json={"isFindLotCount": True}, timeout=20)
-    r.raise_for_status()
-    data = (r.json() or {}).get("data") or []
     id_to_name = {}
     other_id = None
     for it in data:
@@ -171,8 +180,7 @@ app = FastAPI(title="image-details-generator")
 
 @app.on_event("startup")
 def _startup():
-    ensure_models_loaded()
-    fetch_categories(force=True)
+    pass
 
 @app.post("/analyze", response_model=AnalyzeOut)
 def analyze(body: AnalyzeIn):
@@ -208,6 +216,8 @@ def analyze(body: AnalyzeIn):
         title=title, description=desc, categoryID=cat, categoryName=id2name.get(cat, "OTHER")
     )
 
+# --- make /healthz indicate readiness but never block on models or network ---
 @app.get("/healthz")
 def healthz():
-    return {"ok": True}
+    ready = _blip_model is not None and _llm is not None and bool(_id_to_name)
+    return {"ok": True, "ready": ready}

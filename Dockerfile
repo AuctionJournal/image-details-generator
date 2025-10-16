@@ -2,10 +2,16 @@ FROM python:3.11-slim
 
 # --- system deps: OCR + build chain (small) + OpenBLAS runtime ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libglib2.0-0 libjpeg62-turbo libpng16-16 ca-certificates tesseract-ocr \
+    libglib2.0-0 libjpeg62-turbo libpng16-16 ca-certificates \
+    tesseract-ocr tesseract-ocr-eng \
     build-essential cmake ninja-build curl git \
     libopenblas0-pthread \
  && rm -rf /var/lib/apt/lists/*
+
+ ENV OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    TOKENIZERS_PARALLELISM=false \
+    TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
 # --- python base ---
 RUN python -m pip install --upgrade pip setuptools wheel
