@@ -11,12 +11,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m pip install --upgrade pip setuptools wheel
 
 # --- app deps (CPU) ---
-RUN pip install --no-cache-dir \
-    fastapi uvicorn[standard] \
-    torch==2.4.1 torchvision==0.19.1 \
-    transformers==4.44.2 tokenizers==0.19.1 \
-    pillow requests pytesseract huggingface_hub==0.23.0
-
+RUN python -m pip install --upgrade pip && \
+    pip install --no-cache-dir \
+      fastapi uvicorn[standard] \
+      pillow<11 requests pytesseract \
+      "huggingface_hub>=0.23,<0.25" \
+      "transformers==4.44.2" \
+      "tokenizers==0.19.1" \
+      --extra-index-url https://download.pytorch.org/whl/cpu \
+      "torch==2.4.1+cpu" "torchvision==0.19.1+cpu" && \
+    pip install --no-cache-dir "llama-cpp-python==0.2.90"
 # Force llama-cpp to use OpenBLAS on CPU; prefer wheels but can build if needed
 ENV CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
 ENV FORCE_CMAKE=1
