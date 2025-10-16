@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir \
       "torch==2.4.1+cpu" "torchvision==0.19.1+cpu" && \
     pip install --no-cache-dir --prefer-binary "llama-cpp-python==0.2.90"
 
-# --- app files ---
+# --- app files --- 
 WORKDIR /app
 COPY app.py /app/app.py
 
